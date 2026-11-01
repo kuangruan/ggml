@@ -660,6 +660,7 @@ typedef struct {
     int64_t  ne00;
     int64_t  ne01;
     int64_t  ne02;
+    int64_t  ne03;
     uint64_t nb00;
     uint64_t nb01;
     uint64_t nb02;

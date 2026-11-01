@@ -249,18 +249,24 @@ kernel void kernel_group_norm_f32(
     const int64_t ne = args.ne00*args.ne01*args.ne02;
     const int64_t gs = args.ne00*args.ne01*((args.ne02 + args.ngrp - 1) / args.ngrp);
 
-    int start = tgpig * gs;
-    int end   = start + gs;
+    // Group norm normalizes each batch item independently; the grid carries ngrp
+    // threadgroups per batch item, so split the flat threadgroup index.
+    const int64_t batch = tgpig / args.ngrp;
+    const int64_t group = tgpig - batch * args.ngrp;
+    const int64_t base  = batch * ne;
+
+    int64_t start = base + group * gs;
+    int64_t end   = start + gs;
 
     start += tpitg;
 
-    if (end >= ne) {
-        end = ne;
+    if (end > base + ne) {
+        end = base + ne;
     }
 
     float tmp = 0.0f; // partial sum for thread in warp
 
-    for (int j = start; j < end; j += ntg) {
+    for (int64_t j = start; j < end; j += ntg) {
         tmp += src0[j];
     }
 
@@ -286,7 +292,7 @@ kernel void kernel_group_norm_f32(
     const float mean = tmp / gs;
     tmp = 0.0f;
 
-    for (int j = start; j < end; j += ntg) {
+    for (int64_t j = start; j < end; j += ntg) {
         float xi = src0[j] - mean;
         dst[j] = xi;
         tmp += xi * xi;
@@ -312,7 +318,7 @@ kernel void kernel_group_norm_f32(
 
     const float variance = tmp / gs;
     const float scale = 1.0f/sqrt(variance + args.eps);
-    for (int j = start; j < end; j += ntg) {
+    for (int64_t j = start; j < end; j += ntg) {
         dst[j] *= scale;
     }
 }
